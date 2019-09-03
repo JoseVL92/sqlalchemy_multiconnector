@@ -1,2 +1,2 @@
 # sqlalchemy-connector
-Easy connector for SQL Databases, support for sqlite, postgresql and mysql
+Easy connector for SQL Databases (sqlite, postgresql and mysql) in python using sqlaclhemy
