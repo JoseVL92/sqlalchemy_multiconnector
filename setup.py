@@ -5,8 +5,9 @@ setup(
     version=0.1,
     author="Jose Alberto Varona Labrada",
     author_email="jovalab92@gmail.com",
-    description="Easy sqlalchemy connector",
-    python_requires=">=3.5",
+    description=("Easy python SQLAlchemy connector for SQL Databases (sqlite, postgresql and mysql). "
+                 "Support Multi-tenancy with multiple databases and/or multiple schemas"),
+    python_requires=">=3.6",
     url="https://github.com/JoseVL92/sqlalchemy-connector",
     download_url="https://github.com/JoseVL92/sqlalchemy-connector/archive/v_01.tar.gz",
     packages=find_packages(),
