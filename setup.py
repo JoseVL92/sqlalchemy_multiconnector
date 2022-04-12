@@ -9,7 +9,7 @@ setup(
                  "Support multi-tenancy with multiple databases and/or multiple schemas"),
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/sqlalchemy_multiconnector",
-    download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/v_01.tar.gz",
+    download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/refs/tags/v0.1.tar.gz",
     packages=find_packages(),
     data_files=[
         ("", ["LICENSE.txt", "README.md"])
