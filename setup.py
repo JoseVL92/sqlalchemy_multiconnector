@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="sqlalchemy_multiconnector",
-    version=0.1,
+    version=0.2,
     author="Jose Alberto Varona Labrada",
     author_email="jovalab92@gmail.com",
     description=("Easy python SQLAlchemy connector for SQL Databases (sqlite, postgresql and mysql). "
