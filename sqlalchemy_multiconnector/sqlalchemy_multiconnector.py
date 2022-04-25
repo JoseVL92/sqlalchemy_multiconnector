@@ -1,10 +1,13 @@
+from datetime import datetime
+
 from contextlib import contextmanager
 from functools import wraps
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine.row import Row
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, class_mapper
 
 BASE = declarative_base()
 
@@ -39,6 +42,28 @@ def get_uris(db_type, db_host_or_path, db_port, db_name, db_user, db_passwd):
     else:
         raise ValueError("db_name invalid value")
     return uri_dict
+
+
+def to_dict(obj, found=None, recursive=False):
+    if isinstance(obj, Row):
+        return obj._asdict()
+    if found is None:
+        found = set()
+    mapper = class_mapper(obj.__class__)
+    columns = [column.key for column in mapper.columns]
+    get_key_value = lambda c: (c, getattr(obj, c).isoformat()) if isinstance(getattr(obj, c), datetime) else (c, getattr(obj, c))
+    out = dict(map(get_key_value, columns))
+    if recursive:
+        for name, relation in mapper.relationships.items():
+            if relation not in found:
+                found.add(relation)
+                related_obj = getattr(obj, name)
+                if related_obj is not None:
+                    if relation.uselist:
+                        out[name] = [to_dict(child, found, True) for child in related_obj]
+                    else:
+                        out[name] = to_dict(related_obj, found, True)
+    return out
 
 
 class SQLConnector:
@@ -174,7 +199,7 @@ class SQLConnector:
             return resource is not None
         if resource is None:
             raise ValueError(f"Resource '{resource_orm_class.__tablename__}' with pk='{pk}' not found")
-        return resource._asdict()
+        return to_dict(resource)
 
     @staticmethod
     def generic_list_resource(resource_orm_class, resource_query_binding_class, filter_and_sort_dict=None,
@@ -218,7 +243,7 @@ class SQLConnector:
         if not total_count:
             total_count = len(elements_list)
         # returns a list of sources, but first element is the amount of sources without pagination
-        return {"total": total_count, "elements": [elm._asdict() for elm in elements_list]}
+        return {"total": total_count, "elements": [to_dict(elm) for elm in elements_list]}
 
     @staticmethod
     def generic_update_resource(resource_orm_class, pk, *, session=None, **kwargs):
