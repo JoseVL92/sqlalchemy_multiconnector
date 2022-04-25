@@ -116,6 +116,130 @@ class SQLConnector:
         if returnable:
             return response
 
+    @staticmethod
+    def generic_add_resource(resource_orm_class, *, session=None, return_id=False, **kwargs):
+        """
+        Add a resource. Doesn't check for integrity errors. Valid for resources without foreign keys.
+        :param resource_orm_class: ORM class related to the resource
+        :param session: Session to be used to execute query
+        :param return_id: If it needs to commit this query to catch the new autocreated 'id' and returning it
+        :return: True (or element 'id' if return_id is True) if the operation succeeded
+        """
+        element = resource_orm_class(**kwargs)
+        session.add(element)
+        if return_id:
+            session.flush()
+            session.refresh(element)
+            return element.id
+        return True
+
+    @staticmethod
+    def generic_delete_resource(resource_orm_class, pk, *, session=None):
+        """
+        Deletes a resource
+        :param resource_orm_class: ORM class related to the resource
+        :param pk: Primary key value
+        :param session: Session to be used to execute query
+        :return: True if the operation succeeded
+        """
+        resource = session.query(resource_orm_class).get(pk)
+        if resource is not None:
+            session.delete(resource)
+        return True
+
+    @staticmethod
+    def generic_get_resource(resource_orm_class, pk, pk_fieldname=None, fields=None, *,
+                             session=None, check_existence=True):
+        """
+        Get details about a specific resource
+        :param resource_orm_class: ORM class related to the resource
+        :param pk: Primary key value
+        :param pk_fieldname: Primary key column name.
+               If not present, a 'query.get' clause will be used and 'fields' parameter will be ignored'
+        :param fields: Desired columns to be returned. If pk_fieldname is None, it will be ignored
+        :param session: Session to be used to execute query
+        :param check_existence: If this method is invoked just to check resource existence
+        :return: A dictionary with the resource information
+        :raise: ValueError if no resource with 'pk' primary key value is found
+        """
+        if not pk_fieldname:
+            resource = session.query(resource_orm_class).get(pk)
+        else:
+            if fields:
+                fields = [getattr(resource_orm_class, f) for f in fields]
+            else:
+                fields = [resource_orm_class]
+            resource = session.query(*fields).filter(getattr(resource_orm_class, pk_fieldname) == pk).one_or_none()
+        if check_existence:
+            return resource is not None
+        if resource is None:
+            raise ValueError(f"Resource '{resource_orm_class.__tablename__}' with pk='{pk}' not found")
+        return resource._asdict()
+
+    @staticmethod
+    def generic_list_resource(resource_orm_class, resource_query_binding_class, filter_and_sort_dict=None,
+                              fields=None, limit=1000, offset=0, *, session=None):
+        """
+        Get a list of resources that meet a set of parameters
+        :param resource_orm_class: ORM class related to the resource
+        :param resource_query_binding_class: QueryBinding-based class (from 'sqlalchemy-filterparams')
+        :param filter_and_sort_dict: Dictionary of options specified by 'filterparams' library
+        :param fields: Columns to be selected
+        :param limit: Max number of rows fetched
+        :param offset: Number of rows to skip before starting to return rows from the query
+        :param session: Session to be used to execute the query
+        :return: A dictionary with shape {"total": total_count, "elements": [elements_list]}
+        """
+        if limit > 1000:
+            raise ValueError("Limit out of bounds")
+        if filter_and_sort_dict:
+            query = resource_query_binding_class(session=session).evaluate_params(filter_and_sort_dict)
+        else:
+            query = session.query(resource_orm_class)
+
+        if fields:
+            columns = [getattr(resource_orm_class, f) for f in fields]
+            query = query.with_entities(*columns)
+
+        total_count = 0
+        if limit or offset:
+            total_count = query.count()
+
+        # slice operation was kept with documentation purposes
+        if limit and offset:
+            end_index = offset + limit
+            query = query.slice(offset, end_index)
+        elif limit:
+            query = query.limit(limit)
+        elif offset:
+            query = query.offset(offset)
+
+        elements_list = query.all()
+        if not total_count:
+            total_count = len(elements_list)
+        # returns a list of sources, but first element is the amount of sources without pagination
+        return {"total": total_count, "elements": [elm._asdict() for elm in elements_list]}
+
+    @staticmethod
+    def generic_update_resource(resource_orm_class, pk, *, session=None, **kwargs):
+        """
+        Update a resource. Valid for resources without foreign keys
+        :param resource_orm_class: ORM class related to the resource
+        :param pk: Primary key of the existing resource
+        :param session: Session to be used to execute the query
+        :param kwargs: Keywords arguments, each one with name and new value of every field to update
+        :return: True if everything goes well
+        """
+        element = session.query(resource_orm_class).get(pk)
+        if element is None:
+            raise ValueError(f"No record in table '{resource_orm_class.__tablename__}' with pk='{pk}'")
+        for field, new_value in kwargs.items():
+            if not hasattr(element, field):
+                continue
+            setattr(element, field, new_value)
+        # nothing else is needed because the execution of session.commit() is made out of this method
+        return True
+
     @contextmanager
     def session_scope(self, engine_name='default', schema_name=None):
         """Provide a transactional scope around a series of operations."""
