@@ -274,7 +274,7 @@ def manage_session(function):
     @wraps(function)
     def manager(*args, **kwargs):
         if 'session' not in kwargs:
-            db_name = kwargs.get('db_name', 'default')
+            db_name = kwargs.get('db_name') or 'default'
             schema_name = kwargs.get('schema_name')
             with args[0].session_scope(engine_name=db_name, schema_name=schema_name) as session:
                 kwargs.update({"session": session})
