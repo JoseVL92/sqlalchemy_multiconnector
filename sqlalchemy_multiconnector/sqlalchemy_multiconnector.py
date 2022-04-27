@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine.row import Row
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, class_mapper
+from sqlalchemy.orm import sessionmaker, class_mapper, Session
 
 BASE = declarative_base()
 
@@ -116,7 +116,7 @@ class SQLConnector:
         }
         self.Session = sessionmaker(autoflush=session_autoflush, autocommit=session_autocommit)
 
-    def create_tables(self, schemas=None):
+    def create_tables(self, schemas: [] = None):
         schemas = schemas or self.schemas
         if isinstance(schemas, str):
             schemas = [schemas]
@@ -132,7 +132,7 @@ class SQLConnector:
             else:
                 BASE.metadata.create_all(engine)
 
-    def _create_schemas(self, schemas=None):
+    def _create_schemas(self, schemas: [] = None):
         schemas = schemas or self.schemas
         if schemas is None:
             return
@@ -142,7 +142,7 @@ class SQLConnector:
             for sc in schemas:
                 self.execute_query("CREATE SCHEMA IF NOT EXISTS " + sc, engine_name)
 
-    def execute_query(self, query, engine_name='default'):
+    def execute_query(self, query: str, engine_name: str = 'default'):
         """Execute a raw query on database 'engine_name'.
         If any schema will be used, it must be specified in the sql statement"""
         engine = self.engines.get(engine_name)
@@ -159,15 +159,18 @@ class SQLConnector:
             return response
 
     @manage_session
-    def create_resource(self, resource_orm_class, *, return_id=False, session=None, **kwargs):
+    def create_resource(self, resource_orm_class: BASE, element_fields: dict, *, return_id: bool = False,
+                        session: Session = None, **kwargs):
         """
         Add a resource. Doesn't check for integrity errors. Valid for resources without foreign keys.
         :param resource_orm_class: ORM class related to the resource
-        :param session: Session to be used to execute query
+        :param element_fields: Dictionary with column names of the new object as keys and their respective values
         :param return_id: If it needs to commit this query to catch the new autocreated 'id' and returning it
+        :param session: Session to be used to execute query
+        :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: True (or element 'id' if return_id is True) if the operation succeeded
         """
-        element = resource_orm_class(**kwargs)
+        element = resource_orm_class(**element_fields)
         session.add(element)
         if return_id:
             session.flush()
@@ -176,12 +179,13 @@ class SQLConnector:
         return True
 
     @manage_session
-    def delete_resource(self, resource_orm_class, pk, *, session=None):
+    def delete_resource(self, resource_orm_class: BASE, pk, *, session: Session = None, **kwargs):
         """
         Deletes a resource
         :param resource_orm_class: ORM class related to the resource
         :param pk: Primary key value
         :param session: Session to be used to execute query
+        :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: True if the operation succeeded
         """
         resource = session.query(resource_orm_class).get(pk)
@@ -190,8 +194,8 @@ class SQLConnector:
         return True
 
     @manage_session
-    def get_resource(self, resource_orm_class, pk, pk_fieldname=None, fields=None, *,
-                     session=None, check_existence=True):
+    def get_resource(self, resource_orm_class: BASE, pk, pk_fieldname: str = None, fields: list = None, *,
+                     just_check_existence: bool = True, session: Session = None, **kwargs):
         """
         Get details about a specific resource. Fields selection is only allowed if pk_fieldname is specified.
         :param resource_orm_class: ORM class related to the resource
@@ -199,8 +203,9 @@ class SQLConnector:
         :param pk_fieldname: Primary key column name.
                If not present, a 'query.get' clause will be used and 'fields' parameter will be ignored'
         :param fields: Desired columns to be returned. If pk_fieldname is None, it will be ignored
+        :param just_check_existence: If this method is invoked just to check resource existence
         :param session: Session to be used to execute query
-        :param check_existence: If this method is invoked just to check resource existence
+        :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: A dictionary with the resource information
         :raise: ValueError if no resource with 'pk' primary key value is found
         """
@@ -212,15 +217,15 @@ class SQLConnector:
             else:
                 fields = [resource_orm_class]
             resource = session.query(*fields).filter(getattr(resource_orm_class, pk_fieldname) == pk).one_or_none()
-        if check_existence:
+        if just_check_existence:
             return resource is not None
         if resource is None:
             raise ValueError(f"Resource '{resource_orm_class.__tablename__}' with pk='{pk}' not found")
         return to_dict(resource)
 
     @manage_session
-    def list_resources(self, resource_orm_class, resource_query_binding_class, filter_and_sort_dict=None,
-                       fields=None, limit=1000, offset=0, *, session=None):
+    def list_resources(self, resource_orm_class: BASE, resource_query_binding_class, filter_and_sort_dict: dict = None,
+                       fields: list = None, limit: int = 1000, offset: int = 0, *, session: Session = None, **kwargs):
         """
         Get a list of resources that meet a set of parameters
         :param resource_orm_class: ORM class related to the resource
@@ -230,6 +235,7 @@ class SQLConnector:
         :param limit: Max number of rows fetched
         :param offset: Number of rows to skip before starting to return rows from the query
         :param session: Session to be used to execute the query
+        :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: A dictionary with shape {"total": total_count, "elements": [elements_list]}
         """
         if limit > 1000:
@@ -263,21 +269,23 @@ class SQLConnector:
         return {"total": total_count, "elements": [to_dict(elm) for elm in elements_list]}
 
     @manage_session
-    def update_resource(self, resource_orm_class, pk, *, raise_if_bad_field=False, session=None, **kwargs):
+    def update_resource(self, resource_orm_class: BASE, pk, updated_fields: dict, *, raise_if_bad_field: bool = False,
+                        session: Session = None, **kwargs):
         """
         Update a resource. Valid for resources without foreign keys
         :param resource_orm_class: ORM class related to the resource
         :param pk: Primary key of the existing resource
+        :param updated_fields: Dictionary with column names of the updated object as keys and their respective new values
         :param raise_if_bad_field: True if you want to raise an exception when a non-existent field is specified for update
         :param session: Session to be used to execute the query
-        :param kwargs: Keywords arguments, each one with name and new value of every field to update
+        :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: True if everything goes well
         :raise ValueError if some
         """
         element = session.query(resource_orm_class).get(pk)
         if element is None:
             raise ValueError(f"No record in table '{resource_orm_class.__tablename__}' with pk='{pk}'")
-        for field, new_value in kwargs.items():
+        for field, new_value in updated_fields.items():
             if not hasattr(element, field):
                 if raise_if_bad_field:
                     raise ValueError(f"Table '{resource_orm_class.__tablename__}' has no '{field}' column")
@@ -288,7 +296,7 @@ class SQLConnector:
         return True
 
     @contextmanager
-    def session_scope(self, engine_name='default', schema_name=None):
+    def session_scope(self, engine_name: str = 'default', schema_name: str = None):
         """Provide a transactional scope around a series of operations."""
         engine = self.engines.get(engine_name)
         if engine is None:
