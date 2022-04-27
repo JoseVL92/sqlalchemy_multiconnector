@@ -44,6 +44,22 @@ def get_uris(db_type, db_host_or_path, db_port, db_name, db_user, db_passwd):
     return uri_dict
 
 
+def manage_session(function):
+    """Ensure correct session management in transactions"""
+
+    @wraps(function)
+    def manager(*args, **kwargs):
+        if 'session' not in kwargs:
+            db_name = kwargs.get('db_name') or 'default'
+            schema_name = kwargs.get('schema_name')
+            with args[0].session_scope(engine_name=db_name, schema_name=schema_name) as session:
+                kwargs.update({"session": session})
+                return function(*args, **kwargs)
+        return function(*args, **kwargs)
+
+    return manager
+
+
 def to_dict(obj, found=None, recursive=False):
     if isinstance(obj, Row):
         return obj._asdict()
@@ -51,7 +67,8 @@ def to_dict(obj, found=None, recursive=False):
         found = set()
     mapper = class_mapper(obj.__class__)
     columns = [column.key for column in mapper.columns]
-    get_key_value = lambda c: (c, getattr(obj, c).isoformat()) if isinstance(getattr(obj, c), datetime) else (c, getattr(obj, c))
+    get_key_value = lambda c: (c, getattr(obj, c).isoformat()) if isinstance(getattr(obj, c), datetime) else (
+        c, getattr(obj, c))
     out = dict(map(get_key_value, columns))
     if recursive:
         for name, relation in mapper.relationships.items():
@@ -141,8 +158,8 @@ class SQLConnector:
         if returnable:
             return response
 
-    @staticmethod
-    def generic_add_resource(resource_orm_class, *, session=None, return_id=False, **kwargs):
+    @manage_session
+    def create_resource(self, resource_orm_class, *, return_id=False, session=None, **kwargs):
         """
         Add a resource. Doesn't check for integrity errors. Valid for resources without foreign keys.
         :param resource_orm_class: ORM class related to the resource
@@ -158,8 +175,8 @@ class SQLConnector:
             return element.id
         return True
 
-    @staticmethod
-    def generic_delete_resource(resource_orm_class, pk, *, session=None):
+    @manage_session
+    def delete_resource(self, resource_orm_class, pk, *, session=None):
         """
         Deletes a resource
         :param resource_orm_class: ORM class related to the resource
@@ -172,11 +189,11 @@ class SQLConnector:
             session.delete(resource)
         return True
 
-    @staticmethod
-    def generic_get_resource(resource_orm_class, pk, pk_fieldname=None, fields=None, *,
-                             session=None, check_existence=True):
+    @manage_session
+    def get_resource(self, resource_orm_class, pk, pk_fieldname=None, fields=None, *,
+                     session=None, check_existence=True):
         """
-        Get details about a specific resource
+        Get details about a specific resource. Fields selection is only allowed if pk_fieldname is specified.
         :param resource_orm_class: ORM class related to the resource
         :param pk: Primary key value
         :param pk_fieldname: Primary key column name.
@@ -201,9 +218,9 @@ class SQLConnector:
             raise ValueError(f"Resource '{resource_orm_class.__tablename__}' with pk='{pk}' not found")
         return to_dict(resource)
 
-    @staticmethod
-    def generic_list_resource(resource_orm_class, resource_query_binding_class, filter_and_sort_dict=None,
-                              fields=None, limit=1000, offset=0, *, session=None):
+    @manage_session
+    def list_resources(self, resource_orm_class, resource_query_binding_class, filter_and_sort_dict=None,
+                       fields=None, limit=1000, offset=0, *, session=None):
         """
         Get a list of resources that meet a set of parameters
         :param resource_orm_class: ORM class related to the resource
@@ -245,21 +262,26 @@ class SQLConnector:
         # returns a list of sources, but first element is the amount of sources without pagination
         return {"total": total_count, "elements": [to_dict(elm) for elm in elements_list]}
 
-    @staticmethod
-    def generic_update_resource(resource_orm_class, pk, *, session=None, **kwargs):
+    @manage_session
+    def update_resource(self, resource_orm_class, pk, *, raise_if_bad_field=False, session=None, **kwargs):
         """
         Update a resource. Valid for resources without foreign keys
         :param resource_orm_class: ORM class related to the resource
         :param pk: Primary key of the existing resource
+        :param raise_if_bad_field: True if you want to raise an exception when a non-existent field is specified for update
         :param session: Session to be used to execute the query
         :param kwargs: Keywords arguments, each one with name and new value of every field to update
         :return: True if everything goes well
+        :raise ValueError if some
         """
         element = session.query(resource_orm_class).get(pk)
         if element is None:
             raise ValueError(f"No record in table '{resource_orm_class.__tablename__}' with pk='{pk}'")
         for field, new_value in kwargs.items():
             if not hasattr(element, field):
+                if raise_if_bad_field:
+                    raise ValueError(f"Table '{resource_orm_class.__tablename__}' has no '{field}' column")
+                # fails silently by default
                 continue
             setattr(element, field, new_value)
         # nothing else is needed because the execution of session.commit() is made out of this method
@@ -292,18 +314,3 @@ class SQLConnector:
     def kill(self):
         for engine in self.engines:
             self.engines[engine].dispose()
-
-
-def manage_session(function):
-    """Ensure correct session management in transactions"""
-    @wraps(function)
-    def manager(*args, **kwargs):
-        if 'session' not in kwargs:
-            db_name = kwargs.get('db_name') or 'default'
-            schema_name = kwargs.get('schema_name')
-            with args[0].session_scope(engine_name=db_name, schema_name=schema_name) as session:
-                kwargs.update({"session": session})
-                return function(*args, **kwargs)
-        return function(*args, **kwargs)
-
-    return manager
