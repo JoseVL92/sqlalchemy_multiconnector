@@ -195,7 +195,7 @@ class SQLConnector:
 
     @manage_session
     def get_resource(self, resource_orm_class: BASE, pk, pk_fieldname: str = None, fields: list = None, *,
-                     just_check_existence: bool = True, session: Session = None, **kwargs):
+                     just_check_existence: bool = False, session: Session = None, **kwargs):
         """
         Get details about a specific resource. Fields selection is only allowed if pk_fieldname is specified.
         :param resource_orm_class: ORM class related to the resource
@@ -266,7 +266,7 @@ class SQLConnector:
         if not total_count:
             total_count = len(elements_list)
         # returns a list of sources, but first element is the amount of sources without pagination
-        return {"total": total_count, "elements": [to_dict(elm) for elm in elements_list]}
+        return {"total": total_count, "resources": [to_dict(elm) for elm in elements_list]}
 
     @manage_session
     def update_resource(self, resource_orm_class: BASE, pk, updated_fields: dict, *, raise_if_bad_field: bool = False,
