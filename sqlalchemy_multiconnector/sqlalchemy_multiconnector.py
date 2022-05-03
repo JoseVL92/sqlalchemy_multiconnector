@@ -159,23 +159,23 @@ class SQLConnector:
             return response
 
     @manage_session
-    def create_resource(self, resource_orm_class: BASE, element_fields: dict, *, return_id: bool = False,
+    def create_resource(self, resource_orm_class: BASE, resource_fields: dict, *, return_id: bool = False,
                         session: Session = None, **kwargs):
         """
         Add a resource. Doesn't check for integrity errors. Valid for resources without foreign keys.
         :param resource_orm_class: ORM class related to the resource
-        :param element_fields: Dictionary with column names of the new object as keys and their respective values
+        :param resource_fields: Dictionary with column names of the new object as keys and their respective values
         :param return_id: If it needs to commit this query to catch the new autocreated 'id' and returning it
         :param session: Session to be used to execute query
         :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
-        :return: True (or element 'id' if return_id is True) if the operation succeeded
+        :return: True (or resource 'id' if return_id is True) if the operation succeeded
         """
-        element = resource_orm_class(**element_fields)
-        session.add(element)
+        resource = resource_orm_class(**resource_fields)
+        session.add(resource)
         if return_id:
             session.flush()
-            session.refresh(element)
-            return element.id
+            session.refresh(resource)
+            return resource.id
         return True
 
     @manage_session
@@ -236,7 +236,7 @@ class SQLConnector:
         :param offset: Number of rows to skip before starting to return rows from the query
         :param session: Session to be used to execute the query
         :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
-        :return: A dictionary with shape {"total": total_count, "elements": [elements_list]}
+        :return: A dictionary with shape {"total": total_count, "resources": [resources_list]}
         """
         if limit > 1000:
             raise ValueError("Limit out of bounds")
@@ -262,11 +262,11 @@ class SQLConnector:
         elif offset:
             query = query.offset(offset)
 
-        elements_list = query.all()
+        resources_list = query.all()
         if not total_count:
-            total_count = len(elements_list)
+            total_count = len(resources_list)
         # returns a list of sources, but first element is the amount of sources without pagination
-        return {"total": total_count, "resources": [to_dict(elm) for elm in elements_list]}
+        return {"total": total_count, "resources": [to_dict(rsc) for rsc in resources_list]}
 
     @manage_session
     def update_resource(self, resource_orm_class: BASE, pk, updated_fields: dict, *, raise_if_bad_field: bool = False,
@@ -282,16 +282,16 @@ class SQLConnector:
         :return: True if everything goes well
         :raise ValueError if some
         """
-        element = session.query(resource_orm_class).get(pk)
-        if element is None:
+        resource = session.query(resource_orm_class).get(pk)
+        if resource is None:
             raise ValueError(f"No record in table '{resource_orm_class.__tablename__}' with pk='{pk}'")
         for field, new_value in updated_fields.items():
-            if not hasattr(element, field):
+            if not hasattr(resource, field):
                 if raise_if_bad_field:
                     raise ValueError(f"Table '{resource_orm_class.__tablename__}' has no '{field}' column")
                 # fails silently by default
                 continue
-            setattr(element, field, new_value)
+            setattr(resource, field, new_value)
         # nothing else is needed because the execution of session.commit() is made out of this method
         return True
 
