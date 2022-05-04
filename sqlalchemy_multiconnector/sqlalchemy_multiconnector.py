@@ -247,19 +247,26 @@ class SQLConnector:
         :return: A dictionary with the resource information
         :raise: ValueError if no resource with 'pk' primary key value is found
         """
-        if not pk_fieldname:
+        # Check if there are any '*.*' pattern in any field,
+        # which indicates we need to retrieve some relationship property
+        splitted_fields = [f.split('.') for f in fields]
+        no_relations = [len(sf) == 1 for sf in splitted_fields]
+
+        # if pk_fieldname was no specified or any relation was found in 'fields'
+        if not pk_fieldname or not all(no_relations):
             resource = session.query(resource_orm_class).get(pk)
         else:
-            if fields:
-                fields = [getattr(resource_orm_class, f) for f in fields]
-            else:
-                fields = [resource_orm_class]
+            fields = [getattr(resource_orm_class, f) for f in fields]
             resource = session.query(*fields).filter(getattr(resource_orm_class, pk_fieldname) == pk).one_or_none()
         if just_check_existence:
             return resource is not None
+
         if resource is None:
             raise ValueError(f"Resource '{resource_orm_class.__tablename__}' with pk='{pk}' not found")
-        return to_dict(resource)
+
+        if all(no_relations):
+            return to_dict(resource)
+        return {'.'.join(sf): self._dynamic_relations(resource, sf) for sf in splitted_fields}
 
     @manage_session
     def list_resources(self, resource_orm_class: BASE, resource_query_binding_class, filter_and_sort_dict: dict = None,
