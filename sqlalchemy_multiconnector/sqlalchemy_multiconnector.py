@@ -142,6 +142,12 @@ class SQLConnector:
             for sc in schemas:
                 self.execute_query("CREATE SCHEMA IF NOT EXISTS " + sc, engine_name)
 
+    def _dynamic_relations(self, resource_orm_class: BASE, rel_deep_list: list):
+        chained = getattr(resource_orm_class, rel_deep_list[0])
+        if len(rel_deep_list) > 1:
+            return self._dynamic_relations(chained, rel_deep_list[1:])
+        return chained
+
     def execute_query(self, query: str, engine_name: str = 'default'):
         """Execute a raw query on database 'engine_name'.
         If any schema will be used, it must be specified in the sql statement"""
@@ -309,8 +315,9 @@ class SQLConnector:
         return True
 
     @contextmanager
-    def session_scope(self, engine_name: str = 'default', schema_name: str = None):
+    def session_scope(self, engine_name: str = None, schema_name: str = None):
         """Provide a transactional scope around a series of operations."""
+        engine_name = engine_name or 'default'
         engine = self.engines.get(engine_name)
         if engine is None:
             raise ValueError(f"No engine with name {engine_name}")
