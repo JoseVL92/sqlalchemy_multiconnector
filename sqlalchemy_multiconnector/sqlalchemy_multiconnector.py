@@ -159,6 +159,38 @@ class SQLConnector:
             return response
 
     @manage_session
+    def compose_filter_query(self,
+                             resource_orm_class: BASE, resource_query_binding_class, filter_and_sort_dict: dict = None,
+                             fields: list = None, limit: int = 1000, offset: int = 0, *, session: Session = None):
+        """
+        Same as 'list_resources' but only returns the total count and query itself, not evaluated
+        :return: SQLAlchemy Query object
+        """
+        if filter_and_sort_dict:
+            query = resource_query_binding_class(session=session).evaluate_params(filter_and_sort_dict)
+        else:
+            query = session.query(resource_orm_class)
+
+        if fields:
+            columns = [getattr(resource_orm_class, f) for f in fields]
+            query = query.with_entities(*columns)
+
+        total_count = 0
+        if limit or offset:
+            total_count = query.count()
+
+        # slice operation was kept with documentation purposes
+        if limit and offset:
+            end_index = offset + limit
+            query = query.slice(offset, end_index)
+        elif limit:
+            query = query.limit(limit)
+        elif offset:
+            query = query.offset(offset)
+
+        return total_count, query
+
+    @manage_session
     def create_resource(self, resource_orm_class: BASE, resource_fields: dict, *, return_id: bool = False,
                         session: Session = None, **kwargs):
         """
@@ -240,27 +272,8 @@ class SQLConnector:
         """
         if limit > 1000:
             raise ValueError("Limit out of bounds")
-        if filter_and_sort_dict:
-            query = resource_query_binding_class(session=session).evaluate_params(filter_and_sort_dict)
-        else:
-            query = session.query(resource_orm_class)
-
-        if fields:
-            columns = [getattr(resource_orm_class, f) for f in fields]
-            query = query.with_entities(*columns)
-
-        total_count = 0
-        if limit or offset:
-            total_count = query.count()
-
-        # slice operation was kept with documentation purposes
-        if limit and offset:
-            end_index = offset + limit
-            query = query.slice(offset, end_index)
-        elif limit:
-            query = query.limit(limit)
-        elif offset:
-            query = query.offset(offset)
+        total_count, query = self.compose_filter_query(resource_orm_class, resource_query_binding_class,
+                                                       filter_and_sort_dict, fields, limit, offset, session=session)
 
         resources_list = query.all()
         if not total_count:
