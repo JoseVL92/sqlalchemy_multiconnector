@@ -2,14 +2,15 @@ from setuptools import setup, find_packages
 
 setup(
     name="sqlalchemy_multiconnector",
-    version=0.2,
+    version="1.0.0",
     author="Jose Alberto Varona Labrada",
     author_email="jovalab92@gmail.com",
-    description=("Easy python SQLAlchemy connector for SQL Databases (sqlite, postgresql and mysql). "
-                 "Support multi-tenancy with multiple databases and/or multiple schemas"),
+    description=("Python SQLAlchemy connector for SQL databases (sqlite, postgresql and mysql)."
+                 "Easy resources CRUD management."
+                 "Supports multi-tenancy with multiple databases and/or multiple schemas."),
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/sqlalchemy_multiconnector",
-    download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/refs/tags/v0.1.tar.gz",
+    download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/refs/tags/v1.0.tar.gz",
     packages=find_packages(),
     data_files=[
         ("", ["LICENSE.txt", "README.md"])

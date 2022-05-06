@@ -1,3 +1,4 @@
 # sqlalchemy-multiconnector
-Easy python SQLAlchemy connector for SQL Databases (sqlite, postgresql and mysql).
-Support multi-tenancy with multiple databases and/or multiple schemas
+Python SQLAlchemy connector for SQL databases (sqlite, postgresql and mysql).
+Easy resources CRUD management.
+Supports multi-tenancy with multiple databases and/or multiple schemas.
