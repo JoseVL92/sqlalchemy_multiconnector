@@ -12,6 +12,23 @@ from sqlalchemy.orm import sessionmaker, class_mapper, Session
 BASE = declarative_base()
 
 
+def decompose_fields(fields: list):
+    """
+    Auxiliary func to check if 'fields' has a relationship expressed as <rel_name.rel_property>
+    :return Tuple (A, B) where A is the list of fields divided into possible relations and its subproperties,
+            and B is a boolean expressing if there is at least one relation in this fields
+            Ex: ([('name',), ('base')], False)           ---> no relation
+                ([('source', 'title'), ('name',)], True) ---> there is a relation with 'source'
+    """
+    if not fields:
+        return [], False
+    # Check if there are any '*.*' pattern in any field,
+    # which indicates we need to retrieve some relationship property
+    splitted_fields = [f.split('.') for f in fields]
+    are_relations = [len(sf) > 1 for sf in splitted_fields]
+    return splitted_fields, any(are_relations)
+
+
 def get_uris(db_type, db_host_or_path, db_port, db_name, db_user, db_passwd):
     if not db_type or not db_host_or_path or not db_name:
         raise ValueError("Not enough data")
@@ -148,9 +165,11 @@ class SQLConnector:
             return self._dynamic_relations(chained, rel_deep_list[1:])
         return chained
 
-    def execute_query(self, query: str, engine_name: str = 'default'):
+    def execute_query(self, query: str, engine_name: str = None):
         """Execute a raw query on database 'engine_name'.
         If any schema will be used, it must be specified in the sql statement"""
+        if engine_name is None:
+            engine_name = 'default'
         engine = self.engines.get(engine_name)
         if engine is None:
             raise ValueError(f"No engine with name {engine_name}")
@@ -172,12 +191,14 @@ class SQLConnector:
         Same as 'list_resources' but only returns the total count and query itself, not evaluated
         :return: SQLAlchemy Query object
         """
+        _, are_relations = decompose_fields(fields)
+
         if filter_and_sort_dict:
             query = resource_query_binding_class(session=session).evaluate_params(filter_and_sort_dict)
         else:
             query = session.query(resource_orm_class)
 
-        if fields:
+        if fields and not are_relations:
             columns = [getattr(resource_orm_class, f) for f in fields]
             query = query.with_entities(*columns)
 
@@ -235,27 +256,23 @@ class SQLConnector:
     def get_resource(self, resource_orm_class: BASE, pk, pk_fieldname: str = None, fields: list = None, *,
                      just_check_existence: bool = False, session: Session = None, **kwargs):
         """
-        Get details about a specific resource. Fields selection is only allowed if pk_fieldname is specified.
+        Get details about a specific resource.
         :param resource_orm_class: ORM class related to the resource
         :param pk: Primary key value
         :param pk_fieldname: Primary key column name.
-               If not present, a 'query.get' clause will be used and 'fields' parameter will be ignored'
-        :param fields: Desired columns to be returned. If pk_fieldname is None, it will be ignored
+        :param fields: Desired columns to be returned.
         :param just_check_existence: If this method is invoked just to check resource existence
         :param session: Session to be used to execute query
         :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: A dictionary with the resource information
         :raise: ValueError if no resource with 'pk' primary key value is found
         """
-        # Check if there are any '*.*' pattern in any field,
-        # which indicates we need to retrieve some relationship property
-        splitted_fields = [f.split('.') for f in fields]
-        no_relations = [len(sf) == 1 for sf in splitted_fields]
+        splitted_fields, are_relations = decompose_fields(fields)
 
-        # if pk_fieldname was no specified or any relation was found in 'fields'
-        if not pk_fieldname or not all(no_relations):
+        if not pk_fieldname or are_relations:
             resource = session.query(resource_orm_class).get(pk)
         else:
+            # retrieving specific fields is a much more efficient way to query
             fields = [getattr(resource_orm_class, f) for f in fields]
             resource = session.query(*fields).filter(getattr(resource_orm_class, pk_fieldname) == pk).one_or_none()
         if just_check_existence:
@@ -264,9 +281,9 @@ class SQLConnector:
         if resource is None:
             raise ValueError(f"Resource '{resource_orm_class.__tablename__}' with pk='{pk}' not found")
 
-        if all(no_relations):
-            return to_dict(resource)
-        return {'.'.join(sf): self._dynamic_relations(resource, sf) for sf in splitted_fields}
+        if fields:
+            return {'.'.join(sf): self._dynamic_relations(resource, sf) for sf in splitted_fields}
+        return to_dict(resource)
 
     @manage_session
     def list_resources(self, resource_orm_class: BASE, resource_query_binding_class, filter_and_sort_dict: dict = None,
@@ -288,11 +305,22 @@ class SQLConnector:
         total_count, query = self.compose_filter_query(resource_orm_class, resource_query_binding_class,
                                                        filter_and_sort_dict, fields, limit, offset, session=session)
 
+        # if are_relations, returned query just ignored fields
+        splitted_fields, are_relations = decompose_fields(fields)
         resources_list = query.all()
         if not total_count:
             total_count = len(resources_list)
+
+        if fields:
+            response = [
+                {'.'.join(sf): self._dynamic_relations(resource, sf) for sf in splitted_fields} for resource in
+                resources_list
+            ]
+        else:
+            response = [to_dict(rsc) for rsc in resources_list]
+
         # returns a list of sources, but first element is the amount of sources without pagination
-        return {"total": total_count, "resources": [to_dict(rsc) for rsc in resources_list]}
+        return {"total": total_count, "resources": response}
 
     @manage_session
     def update_resource(self, resource_orm_class: BASE, pk, updated_fields: dict, *, raise_if_bad_field: bool = False,
