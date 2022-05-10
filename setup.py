@@ -7,7 +7,9 @@ setup(
     author_email="jovalab92@gmail.com",
     description=("Python SQLAlchemy connector for SQL databases (sqlite, postgresql and mysql)."
                  "Easy resources CRUD management."
-                 "Supports multi-tenancy with multiple databases and/or multiple schemas."),
+                 "Supports multi-tenancy with multiple databases and/or multiple schemas."
+                 "More infor in [project Github page](https://github.com/JoseVL92/sqlalchemy_multiconnector)"
+                 ),
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/sqlalchemy_multiconnector",
     download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/refs/tags/v1.0.tar.gz",
