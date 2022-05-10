@@ -5,10 +5,9 @@ setup(
     version="1.0.0",
     author="Jose Alberto Varona Labrada",
     author_email="jovalab92@gmail.com",
-    description=("Python SQLAlchemy connector for SQL databases (sqlite, postgresql and mysql)."
-                 "Easy resources CRUD management."
+    description=("Python SQLAlchemy connector for SQL databases (sqlite, postgresql and mysql).\n"
+                 "Easy resources CRUD management.\n"
                  "Supports multi-tenancy with multiple databases and/or multiple schemas."
-                 "More infor in [project Github page](https://github.com/JoseVL92/sqlalchemy_multiconnector)"
                  ),
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/sqlalchemy_multiconnector",
