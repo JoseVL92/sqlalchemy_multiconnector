@@ -12,7 +12,7 @@ setup(
                  ),
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/sqlalchemy_multiconnector",
-    download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/refs/tags/v1.0.tar.gz",
+    download_url="https://github.com/JoseVL92/sqlalchemy_multiconnector/archive/refs/tags/1.0.zip",
     packages=find_packages(),
     data_files=[
         ("", ["LICENSE.txt", "README.md"])
