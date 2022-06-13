@@ -269,7 +269,7 @@ class SQLConnector:
         """
         splitted_fields, are_relations = decompose_fields(fields)
 
-        if not pk_fieldname or are_relations:
+        if not pk_fieldname or not fields or are_relations:
             resource = session.query(resource_orm_class).get(pk)
         else:
             # retrieving specific fields is a much more efficient way to query
