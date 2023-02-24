@@ -84,9 +84,10 @@ def to_dict(obj, found=None, recursive=False):
         found = set()
     mapper = class_mapper(obj.__class__)
     columns = [column.key for column in mapper.columns]
+    properties = [p for p in dir(obj.__class__) if isinstance(getattr(obj.__class__, p), property)]
     get_key_value = lambda c: (c, getattr(obj, c).isoformat()) if isinstance(getattr(obj, c), datetime) else (
         c, getattr(obj, c))
-    out = dict(map(get_key_value, columns))
+    out = dict(map(get_key_value, columns + properties))
     if recursive:
         for name, relation in mapper.relationships.items():
             if relation not in found:
