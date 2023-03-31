@@ -3,7 +3,7 @@ from datetime import datetime
 from contextlib import contextmanager
 from functools import wraps
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine.row import Row
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.declarative import declarative_base
