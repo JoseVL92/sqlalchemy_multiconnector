@@ -166,7 +166,7 @@ class SQLConnector:
             return self._dynamic_relations(chained, rel_deep_list[1:])
         return chained
 
-    def execute_query(self, query: str, engine_name: str = None):
+    def execute_query(self, query: str, engine_name: str = None, **query_params):
         """Execute a raw query on database 'engine_name'.
         If any schema will be used, it must be specified in the sql statement"""
         if engine_name is None:
@@ -174,15 +174,11 @@ class SQLConnector:
         engine = self.engines.get(engine_name)
         if engine is None:
             raise ValueError(f"No engine with name {engine_name}")
-        connection = engine.connect()
-        response = connection.execute(query)
-        returnable = False
-        if hasattr(response, '.fetch_all()'):
-            response = response.fetch_all()
-            returnable = True
-        connection.close()
-        if returnable:
-            return response
+        query = text(query, **query_params)
+        with engine.connect() as connection:
+            response = connection.execute(query)
+            response = response.mappings().all()
+        return response
 
     @manage_session
     def compose_filter_query(self,
