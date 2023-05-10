@@ -284,7 +284,8 @@ class SQLConnector:
 
     @manage_session
     def list_resources(self, resource_orm_class: BASE, resource_query_binding_class, filter_and_sort_dict: dict = None,
-                       fields: list = None, limit: int = 1000, offset: int = 0, *, session: Session = None, **kwargs):
+                       fields: list = None, limit: int = 1000, offset: int = 0, distinct=True,
+                       *, session: Session = None, **kwargs):
         """
         Get a list of resources that meet a set of parameters
         :param resource_orm_class: ORM class related to the resource
@@ -293,6 +294,7 @@ class SQLConnector:
         :param fields: Columns to be selected
         :param limit: Max number of rows fetched
         :param offset: Number of rows to skip before starting to return rows from the query
+        :param distinct: When to apply the distinct clause or not
         :param session: Session to be used to execute the query
         :param kwargs: Additional keyword arguments for session (eg: db_name or schema_name)
         :return: A dictionary with shape {"total": total_count, "resources": [resources_list]}
@@ -304,6 +306,8 @@ class SQLConnector:
 
         # if are_relations, returned query just ignored fields
         splitted_fields, are_relations = decompose_fields(fields)
+        if distinct:
+            query = query.distinct()
         resources_list = query.all()
         if not total_count:
             total_count = len(resources_list)
