@@ -166,7 +166,7 @@ class SQLConnector:
             return self._dynamic_relations(chained, rel_deep_list[1:])
         return chained
 
-    def execute_query(self, query: str, engine_name: str = None, **query_params):
+    def execute_query(self, query: str, engine_name: str = None, max_buffer_size=None, **query_params):
         """Execute a raw query on database 'engine_name'.
         If any schema will be used, it must be specified in the sql statement"""
         if engine_name is None:
@@ -175,9 +175,23 @@ class SQLConnector:
         if engine is None:
             raise ValueError(f"No engine with name {engine_name}")
         query = text(query, **query_params)
-        with engine.connect() as connection:
-            response = connection.execute(query)
-            response = response.mappings().all()
+        # if streaming, it returns a generator
+        if max_buffer_size is not None:
+            # with engine.execution_options(stream_results=True, max_row_buffer=max_buffer_size).connect() as connection:
+            #     response = connection.execute(query)
+            #     keys = response.keys()
+            #     response = (dict(zip(keys, row)) for row in response)
+            connection = engine.execution_options(stream_results=True, max_row_buffer=max_buffer_size)
+            try:  # SQLAlchemy >= 2
+                response = connection.execute(query)
+            except AttributeError:  # SQLAlchemy < 2
+                response = connection.connect().execute(query)
+            keys = response.keys()
+            response = (dict(zip(keys, row)) for row in response)
+        else:
+            with engine.connect() as connection:
+                response = connection.execute(query)
+                response = response.mappings().all()
         return response
 
     @manage_session
